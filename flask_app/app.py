@@ -31,7 +31,6 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
 
 
-
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
