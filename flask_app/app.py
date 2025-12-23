@@ -20,6 +20,16 @@ import matplotlib.dates as mdates
 from dotenv import load_dotenv
 import os
 from pathlib import Path
+import google.generativeai as genai
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import tempfile
+from datetime import datetime
+import uuid
+import textwrap
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib import colors
+
 
 
 env_path = Path(__file__).resolve().parent / ".env"
@@ -32,8 +42,89 @@ print("DEBUG → YOUTUBE_API_KEY loaded:", bool(YOUTUBE_API_KEY))
 if not YOUTUBE_API_KEY:
     raise RuntimeError("YOUTUBE_API_KEY not found in environment")
 
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY not found in .env")
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+# for m in genai.list_models():
+#     if 'generateContent' in m.supported_generation_methods:
+#         print(m.name)
+
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+def clean_text(text: str) -> str:
+    """Remove unicode characters that ReportLab cannot render"""
+    return text.encode("ascii", "ignore").decode()
+
+
+def draw_heading(c, text, y):
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, y, text)
+    return y - 25
+
+
+def draw_paragraph(c, text, y):
+    c.setFont("Helvetica", 11)
+    for line in textwrap.wrap(text, 90):
+        if y < 60:
+            c.showPage()
+            c.setFont("Helvetica", 11)
+            y = 800
+        c.drawString(50, y, line)
+        y -= 14
+    return y - 10
+
+
+def add_page_number(c):
+    c.setFont("Helvetica", 9)
+    c.drawRightString(570, 20, f"Page {c.getPageNumber()}")
+
+def render_structured_text(c, text, y, page_height):
+    sections = ["Executive Summary", "Key Insights", "Recommendations", "Conclusion"]
+
+    for i, section in enumerate(sections):
+        if section not in text:
+            continue
+
+        # Split at current section
+        after = text.split(section, 1)[1].strip()
+
+        # Find where the next section starts
+        next_index = len(after)
+        for next_section in sections[i + 1:]:
+            pos = after.find(next_section)
+            if pos != -1:
+                next_index = pos
+                break
+
+        paragraph = after[:next_index].strip()
+
+        # Draw section heading
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, y, section)
+        y -= 22
+
+        # Draw paragraph
+        c.setFont("Helvetica", 11)
+        for line in textwrap.wrap(paragraph, 95):
+            if y < 60:
+                add_page_number(c)
+                c.showPage()
+                c.setFont("Helvetica", 11)
+                y = page_height - 60
+            c.drawString(50, y, line)
+            y -= 14
+
+        y -= 18
+
+    return y
+
+
 
 # Define the preprocessing function
 def preprocess_comment(comment):
@@ -67,7 +158,7 @@ def preprocess_comment(comment):
 # Load the model and vectorizer from the model registry and local storage
 def load_model_and_vectorizer(model_name, model_version, vectorizer_path):
     # Set MLflow tracking URI to your server
-    mlflow.set_tracking_uri("http://ec2-34-229-220-181.compute-1.amazonaws.com:5000/")  # Replace with your MLflow tracking URI
+    mlflow.set_tracking_uri("http://ec2-3-93-194-48.compute-1.amazonaws.com:5000/")  # Replace with your MLflow tracking URI
     client = MlflowClient()
     model_uri = f"models:/{model_name}/{model_version}"
     model = mlflow.pyfunc.load_model(model_uri)
@@ -346,6 +437,145 @@ def generate_trend_graph():
     except Exception as e:
         app.logger.error(f"Error in /generate_trend_graph: {e}")
         return jsonify({"error": f"Trend graph generation failed: {str(e)}"}), 500
+    
+@app.route("/generate_pdf_report", methods=["POST"])
+def generate_pdf_report():
+    data = request.json
+
+    # ---------- GEMINI PROMPT ----------
+    prompt = f"""
+Write a professional YouTube Comment Sentiment Analysis Report in plain text English.
+
+IMPORTANT INSTRUCTIONS:
+- Do NOT use Markdown
+- Do NOT use bullet points
+- Do NOT use symbols like -, *, ##, ###, ---
+- Write only normal sentences and paragraphs
+- Separate sections using a blank line
+- Use simple section titles followed by paragraphs
+
+Use the following structure EXACTLY:
+
+Executive Summary
+Write one clear paragraph summarizing the overall sentiment and engagement.
+
+Key Insights
+Write one or two paragraphs explaining major sentiment trends, audience reactions, and engagement patterns.
+
+Recommendations
+Write a paragraph suggesting improvements or next steps based on the analysis.
+
+Conclusion
+Write a short concluding paragraph summarizing the findings.
+
+Here is the analysis data you must use:
+
+Total Comments: {data['summary']['totalComments']}
+Unique Commenters: {data['summary']['uniqueCommenters']}
+Average Comment Length: {data['summary']['avgWordLength']} words
+Average Sentiment Score: {data['summary']['normalizedSentimentScore']}/10
+
+Sentiment Distribution:
+{data['sentimentCounts']}
+
+Sample Positive Comments:
+{data['sentimentSamples']['positive']}
+
+Sample Negative Comments:
+{data['sentimentSamples']['negative']}
+"""
+
+    model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
+    response = model.generate_content(prompt)
+
+    if not response or not response.text:
+        return jsonify({"error": "Gemini returned empty response"}), 500
+
+    safe_text = clean_text(response.text)
+
+    # ---------- FILE PATH ----------
+    filename = f"youtube_report_{uuid.uuid4().hex}.pdf"
+    path = os.path.join(tempfile.gettempdir(), filename)
+
+    c = canvas.Canvas(path, pagesize=A4)
+    width, height = A4
+
+    # ---------- COVER PAGE ----------
+    c.setFont("Helvetica-Bold", 26)
+    c.drawCentredString(width / 2, height - 200,
+                        "YouTube Comment Sentiment Analysis")
+
+    c.setFont("Helvetica", 14)
+    c.drawCentredString(width / 2, height - 240,
+                        "AI-Generated Analytical Report")
+
+    c.setFont("Helvetica", 12)
+    c.drawCentredString(width / 2, height - 300,
+                        f"Generated on: {datetime.now().strftime('%d %B %Y')}")
+
+    add_page_number(c)
+    c.showPage()
+
+    # ---------- METRICS TABLE ----------
+    table_data = [
+        ["Metric", "Value"],
+        ["Total Comments", data["summary"]["totalComments"]],
+        ["Unique Commenters", data["summary"]["uniqueCommenters"]],
+        ["Avg Comment Length", f'{data["summary"]["avgWordLength"]} words'],
+        ["Avg Sentiment Score", f'{data["summary"]["normalizedSentimentScore"]}/10']
+    ]
+
+    table = Table(table_data, colWidths=[260, 200])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.grey),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("GRID", (0,0), (-1,-1), 1, colors.black),
+        ("FONT", (0,0), (-1,0), "Helvetica-Bold"),
+        ("ALIGN", (1,1), (-1,-1), "CENTER")
+    ]))
+
+    table.wrapOn(c, width, height)
+    table.drawOn(c, 80, height - 320)
+
+    add_page_number(c)
+    c.showPage()
+
+    # ---------- SENTIMENT PIE CHART ----------
+    labels = ["Positive", "Neutral", "Negative"]
+    values = [
+        data["sentimentCounts"]["1"],
+        data["sentimentCounts"]["0"],
+        data["sentimentCounts"]["-1"]
+    ]
+
+    plt.figure()
+    plt.pie(values, labels=labels, autopct="%1.1f%%")
+    chart_path = os.path.join(tempfile.gettempdir(), "sentiment_chart.png")
+    plt.savefig(chart_path)
+    plt.close()
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, height - 80, "Sentiment Distribution")
+    c.drawImage(chart_path, 100, height - 450, width=350, height=350)
+
+    add_page_number(c)
+    c.showPage()
+
+    # ---------- REPORT TEXT ----------
+    y = height - 60
+    y = render_structured_text(c, safe_text, y, height)
+
+    add_page_number(c)
+    c.save()
+
+    return send_file(
+        path,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name="YouTube_Comment_Analysis_Report.pdf"
+    )
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
