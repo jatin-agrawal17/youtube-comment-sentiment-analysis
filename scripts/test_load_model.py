@@ -4,7 +4,7 @@ import pytest
 from mlflow.tracking import MlflowClient
 
 # Set your remote tracking URI
-mlflow.set_tracking_uri("http://ec2-54-196-109-131.compute-1.amazonaws.com:5000/")
+mlflow.set_tracking_uri("http://ec2-3-93-194-48.compute-1.amazonaws.com:5000/")
 
 @pytest.mark.parametrize("model_name, stage", [
     ("my_model", "staging"),  # Replace 'my_model' with your actual model name
