@@ -3,32 +3,46 @@
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend before importing pyplot
 
+# ===== Standard library imports =====
+import io
+import os
+import re
+import uuid
+import tempfile
+import textwrap
+from datetime import datetime
+from pathlib import Path
+
+# ===== Third-party imports =====
+import numpy as np
+import pandas as pd
+import joblib
+import mlflow
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import google.generativeai as genai
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import io
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
-import mlflow
-import numpy as np
-import joblib
-import re
-import pandas as pd
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from mlflow.tracking import MlflowClient
-import matplotlib.dates as mdates
-from dotenv import load_dotenv
-import os
-from pathlib import Path
-import google.generativeai as genai
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import tempfile
-from datetime import datetime
-import uuid
-import textwrap
 from reportlab.platypus import Table, TableStyle
 from reportlab.lib import colors
+from wordcloud import WordCloud
+from mlflow.tracking import MlflowClient
+
+"""
+Flask application for YouTube Comment Sentiment Analysis.
+
+This app provides APIs for:
+- Sentiment prediction
+- Visualization generation
+- PDF report export
+- MLflow model integration
+"""
+
 
 
 env_path = Path(__file__).resolve().parent / ".env"
@@ -157,7 +171,7 @@ def preprocess_comment(comment):
 # Load the model and vectorizer from the model registry and local storage
 def load_model_and_vectorizer(model_name, model_version, vectorizer_path):
     # Set MLflow tracking URI to your server
-    mlflow.set_tracking_uri("http://ec2-3-93-194-48.compute-1.amazonaws.com:5000/")  # Replace with your MLflow tracking URI
+    mlflow.set_tracking_uri("http://ec2-52-90-147-94.compute-1.amazonaws.com:5000/")  # Replace with your MLflow tracking URI
     client = MlflowClient()
     model_uri = f"models:/{model_name}/{model_version}"
     model = mlflow.pyfunc.load_model(model_uri)
@@ -220,7 +234,7 @@ def health():
 def predict_with_timestamps():
     data = request.json
     comments_data = data.get('comments')
-    
+
     if not comments_data:
         return jsonify({"error": "No comments provided"}), 400
 
@@ -230,18 +244,18 @@ def predict_with_timestamps():
 
         # Preprocess each comment before vectorizing
         preprocessed_comments = [preprocess_comment(comment) for comment in comments]
-        
+
         # Transform comments using the vectorizer
         transformed_comments = vectorizer.transform(preprocessed_comments)
-        
+
         # Make predictions
         predictions = model.predict(transformed_comments).tolist()  # Convert to list
-        
+
         # Convert predictions to strings for consistency
         predictions = [str(pred) for pred in predictions]
     except Exception as e:
         return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
-    
+
     # Return the response with original comments, predicted sentiments, and timestamps
     response = [{"comment": comment, "sentiment": sentiment, "timestamp": timestamp} for comment, sentiment, timestamp in zip(comments, predictions, timestamps)]
     return jsonify(response)
@@ -250,25 +264,25 @@ def predict_with_timestamps():
 def predict():
     data = request.json
     comments = data.get('comments')
-    
+
     if not comments:
         return jsonify({"error": "No comments provided"}), 400
 
     try:
         # Preprocess each comment before vectorizing
         preprocessed_comments = [preprocess_comment(comment) for comment in comments]
-        
+
         # Transform comments using the vectorizer
         transformed_comments = vectorizer.transform(preprocessed_comments)
-        
+
         # Make predictions
         predictions = model.predict(transformed_comments).tolist()  # Convert to list
-        
+
         # Convert predictions to strings for consistency
         predictions = [str(pred) for pred in predictions]
     except Exception as e:
         return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
-    
+
     # Return the response with original comments and predicted sentiments
     response = [{"comment": comment, "sentiment": sentiment} for comment, sentiment in zip(comments, predictions)]
     return jsonify(response)
@@ -278,7 +292,7 @@ def generate_chart():
     try:
         data = request.get_json()
         sentiment_counts = data.get('sentiment_counts')
-        
+
         if not sentiment_counts:
             return jsonify({"error": "No sentiment counts provided"}), 400
 
@@ -291,7 +305,7 @@ def generate_chart():
         ]
         if sum(sizes) == 0:
             raise ValueError("Sentiment counts sum to zero")
-        
+
         colors = ['#36A2EB', '#C9CBCF', '#FF6384']  # Blue, Gray, Red
 
         # Generate the pie chart
@@ -436,7 +450,7 @@ def generate_trend_graph():
     except Exception as e:
         app.logger.error(f"Error in /generate_trend_graph: {e}")
         return jsonify({"error": f"Trend graph generation failed: {str(e)}"}), 500
-    
+
 @app.route("/generate_pdf_report", methods=["POST"])
 def generate_pdf_report():
     data = request.json

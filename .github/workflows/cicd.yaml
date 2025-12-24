@@ -115,3 +115,7 @@ jobs:
       - name: Run Flask API tests
         run: |
           pytest scripts/test_flask_api.py
+
+      - name: Run Pylint (non-blocking)
+        run: |
+          pylint flask_app/app.py || true
