@@ -45,15 +45,14 @@ This app provides APIs for:
 
 
 
-env_path = Path(__file__).resolve().parent / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
 
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-print("DEBUG → YOUTUBE_API_KEY loaded:", bool(YOUTUBE_API_KEY))
+# YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+# print("DEBUG → YOUTUBE_API_KEY loaded:", bool(YOUTUBE_API_KEY))
 
-if not YOUTUBE_API_KEY:
-    raise RuntimeError("YOUTUBE_API_KEY not found in environment")
+# if not YOUTUBE_API_KEY:
+#     raise RuntimeError("YOUTUBE_API_KEY not found in environment")
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -184,41 +183,41 @@ model, vectorizer = load_model_and_vectorizer("yt_chrome_plugin_model", "1", "./
 
 import requests
 
-@app.route('/fetch-comments', methods=['POST'])
-def fetch_comments():
-    data = request.get_json()
-    video_id = data.get("video_id")
+# @app.route('/fetch-comments', methods=['POST'])
+# def fetch_comments():
+#     data = request.get_json()
+#     video_id = data.get("video_id")
 
-    if not video_id:
-        return jsonify({"error": "video_id required"}), 400
+#     if not video_id:
+#         return jsonify({"error": "video_id required"}), 400
 
-    url = "https://www.googleapis.com/youtube/v3/commentThreads"
-    params = {
-        "part": "snippet",
-        "videoId": video_id,
-        "maxResults": 100,
-        "textFormat": "plainText",
-        "key": YOUTUBE_API_KEY
-    }
+#     url = "https://www.googleapis.com/youtube/v3/commentThreads"
+#     params = {
+#         "part": "snippet",
+#         "videoId": video_id,
+#         "maxResults": 100,
+#         "textFormat": "plainText",
+#         "key": YOUTUBE_API_KEY
+#     }
 
-    try:
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        yt_data = r.json()
+#     try:
+#         r = requests.get(url, params=params, timeout=10)
+#         r.raise_for_status()
+#         yt_data = r.json()
 
-        comments = []
-        for item in yt_data.get("items", []):
-            snippet = item["snippet"]["topLevelComment"]["snippet"]
-            comments.append({
-                "text": snippet["textDisplay"],
-                "timestamp": snippet["publishedAt"]
-            })
+#         comments = []
+#         for item in yt_data.get("items", []):
+#             snippet = item["snippet"]["topLevelComment"]["snippet"]
+#             comments.append({
+#                 "text": snippet["textDisplay"],
+#                 "timestamp": snippet["publishedAt"]
+#             })
 
-        return jsonify({"comments": comments})
+#         return jsonify({"comments": comments})
 
-    except Exception as e:
-        app.logger.error(f"YouTube API error: {e}")
-        return jsonify({"error": "Failed to fetch comments"}), 500
+#     except Exception as e:
+#         app.logger.error(f"YouTube API error: {e}")
+#         return jsonify({"error": "Failed to fetch comments"}), 500
 
 
 @app.route('/')

@@ -90,3 +90,11 @@ target/
 /lgbm_model.pkl
 /tfidf_vectorizer.pkl
 /experiment_info.json
+
+
+flask_app/.env
+__pycache__/
+*.pyc
+.git
+.gitignore
+docs/
