@@ -128,8 +128,8 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t jatinag12/yt-chrome-plugin:latest .
+          docker build -t jatinag12/youtube-chrome-plugin:latest .
 
       - name: Push Docker image to Docker Hub
         run: |
-          docker push jatinag12/yt-chrome-plugin:latest 
+          docker push jatinag12/youtube-chrome-plugin:latest 
