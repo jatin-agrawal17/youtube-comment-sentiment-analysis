@@ -120,16 +120,27 @@ jobs:
         run: |
           pylint flask_app/app.py || true
 
-
-      - name: Login to Docker Hub
+      - name: Login to AWS ECR
+        if: success()
         run: |
-          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \
-          docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 399699944452.dkr.ecr.us-east-1.amazonaws.com
 
       - name: Build Docker image
+        if: success()
         run: |
-          docker build -t jatinag12/youtube-chrome-plugin:latest .
+          docker build -t youtube-comment-analysis .
 
-      - name: Push Docker image to Docker Hub
+      - name: Tag Docker image
+        if: success()
         run: |
-          docker push jatinag12/youtube-chrome-plugin:latest 
+          docker tag youtube-comment-analysis:latest 399699944452.dkr.ecr.us-east-1.amazonaws.com/youtube-comment-analysis:latest
+
+      - name: Push Docker image to AWS ECR
+        if: success()
+        run: |
+          docker push 399699944452.dkr.ecr.us-east-1.amazonaws.com/youtube-comment-analysis:latest
+
+
+      
