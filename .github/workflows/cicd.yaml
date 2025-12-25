@@ -120,24 +120,16 @@ jobs:
         run: |
           pylint flask_app/app.py || true
 
-      - name: Login to AWS ECR
-        if: success()
+
+      - name: Login to Docker Hub
         run: |
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 399699944452.dkr.ecr.us-east-1.amazonaws.com
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \
+          docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build Docker image
-        if: success()
         run: |
-          docker build -t yt-chrome-plugin .
+          docker build -t jatinag12/yt-chrome-plugin:latest .
 
-      - name: Tag Docker image
-        if: success()
+      - name: Push Docker image to Docker Hub
         run: |
-          docker tag yt-chrome-plugin:latest 399699944452.dkr.ecr.us-east-1.amazonaws.com/yt-chrome-plugin:latest
-
-      - name: Push Docker image to AWS ECR
-        if: success()
-        run: |
-          docker push 399699944452.dkr.ecr.us-east-1.amazonaws.com/yt-chrome-plugin:latest
+          docker push jatinag12/yt-chrome-plugin:latest 
