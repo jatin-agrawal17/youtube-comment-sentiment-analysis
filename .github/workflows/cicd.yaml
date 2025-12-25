@@ -130,17 +130,16 @@ jobs:
       - name: Build Docker image
         if: success()
         run: |
-          docker build -t youtube-comment-analysis-plugin .
+          docker build -t yt-comment-chrome-plugin .
 
       - name: Tag Docker image
         if: success()
         run: |
-          docker tag youtube-comment-analysis-plugin:latest 399699944452.dkr.ecr.us-east-1.amazonaws.com/youtube-comment-analysis-plugin:latest
-
+          docker tag yt-comment-chrome-plugin:latest 399699944452.dkr.ecr.us-east-1.amazonaws.com/yt-comment-chrome-plugin:latest
       - name: Push Docker image to AWS ECR
         if: success()
         run: |
-          docker push 399699944452.dkr.ecr.us-east-1.amazonaws.com/youtube-comment-analysis-plugin:latest
+          docker push 399699944452.dkr.ecr.us-east-1.amazonaws.com/yt-comment-chrome-plugin:latest
 
 
       
